@@ -67,6 +67,7 @@ func main() {
 	//
 	i := 0
 	for i < len(intermediate) {
+		//fmt.Println("value:", intermediate[i].Value)
 		j := i + 1
 		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
 			j++

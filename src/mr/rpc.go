@@ -6,7 +6,10 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
+import (
+	"fmt"
+	"os"
+)
 import "strconv"
 
 //
@@ -24,6 +27,37 @@ type ExampleReply struct {
 
 // Add your RPC definitions here.
 
+type WorkerArgs struct {
+	// 0 ask for a new task
+	// 1 report map task finished
+	// 2 report reduce task finished
+	Task int8
+	X    int
+}
+
+func (w WorkerArgs) String() string {
+	return fmt.Sprintf("WorkerArgs{Task: %v, X: %v}", w.Task, w.X)
+}
+
+type CoordinatorReply struct {
+	// -3 exit immediately
+	// -2 request immediately
+	// -1 request later
+	// 0 Map task
+	// 1 Reduce task
+	Task int8
+
+	// Task == 0
+	X       int
+	File    string
+	NReduce int
+
+	// Task == 1
+}
+
+func (c CoordinatorReply) String() string {
+	return fmt.Sprintf("CoordinatorReply{Task: %v, X: %v, File: %v, NReduce: %v}", c.Task, c.X, c.File, c.NReduce)
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
