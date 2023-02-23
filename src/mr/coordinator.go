@@ -72,6 +72,10 @@ func (c *Coordinator) Pseudo_task(key int, ch chan struct{}, taskname string) {
 }
 
 func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) error {
+	if c.finished {
+		reply.Task = -3
+		return nil
+	}
 	reply.Task = -1 //default value,the worker will wait for a while
 	switch args.Task {
 	case 0:
@@ -92,6 +96,7 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 						delete(c.taskStatue.New, key)
 						break
 					}
+					//fmt.Println(c.taskStatue.New)
 				}
 			}()
 
@@ -132,6 +137,8 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 				for i := 0; i < c.nReduce; i++ {
 					c.taskStatue.New[i] = strconv.Itoa(i)
 				}
+				c.taskStatue.Allocated = make(map[int]AllocatedType)
+				c.taskStatue.Finished = make(map[int]string)
 				c.mapStatue.SetFinished(true)
 
 			}
@@ -150,6 +157,7 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 			if len(c.taskStatue.Finished) == c.nReduce {
 				reply.Task = -3
 				c.finished = true
+				//fmt.Println(c.taskStatue.New)
 			} else {
 				reply.Task = -2
 			}

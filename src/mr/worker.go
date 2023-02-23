@@ -40,29 +40,40 @@ func Worker(mapf func(string, string) []KeyValue,
 	c := connect()
 	curDir, _ := os.Getwd()
 	//log.Printf("current  %v\n", curDir)
-	var args WorkerArgs
-	var reply CoordinatorReply
-NewRequset:
-	args = WorkerArgs{}
-	reply = CoordinatorReply{}
+	args := &WorkerArgs{}
+	reply := &CoordinatorReply{}
 
 	// Your worker implementation here.
 	// 1. call the coordinator to get a task.
 	args.Task = 0
-	ok := call("Coordinator.WorkerHandler", &args, &reply, c)
+	ok := call("Coordinator.WorkerHandler", args, reply, c)
 	if !ok {
 		return
 	}
 
+NewRequset:
+	args = &WorkerArgs{}
 	// 2. do the task.
 	switch reply.Task {
 	case -3:
 		log.Printf("worker exit\n")
 		return
 	case -2:
+		reply = &CoordinatorReply{}
+		args.Task = 0
+		ok := call("Coordinator.WorkerHandler", args, reply, c)
+		if !ok {
+			return
+		}
 		goto NewRequset
 	case -1:
 		time.Sleep(5 * time.Second)
+		reply = &CoordinatorReply{}
+		args.Task = 0
+		ok := call("Coordinator.WorkerHandler", args, reply, c)
+		if !ok {
+			return
+		}
 		goto NewRequset
 	case 0: //do map task
 		func() {
@@ -102,8 +113,9 @@ NewRequset:
 			// report task finished
 			args.Task = 1
 			args.X = reply.X
-			reply := CoordinatorReply{}
-			ok := call("Coordinator.WorkerHandler", &args, &reply, c)
+			//reply := CoordinatorReply{}
+			reply = &CoordinatorReply{}
+			ok := call("Coordinator.WorkerHandler", args, reply, c)
 			if !ok {
 				return
 			}
@@ -163,8 +175,8 @@ NewRequset:
 			// report task finished
 			args.Task = 2
 			args.X = x
-			reply := CoordinatorReply{}
-			ok := call("Coordinator.WorkerHandler", &args, &reply, c)
+			reply = &CoordinatorReply{}
+			ok := call("Coordinator.WorkerHandler", args, reply, c)
 			if !ok {
 				return
 			}
