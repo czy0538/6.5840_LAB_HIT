@@ -51,7 +51,7 @@ type Coordinator struct {
 
 // Your code here -- RPC handlers for the worker to call.
 
-func (c *Coordinator) Pseudo_task(key int, ch chan struct{}) {
+func (c *Coordinator) Pseudo_task(key int, ch chan struct{}, taskname string) {
 	tick := time.Tick(1 * time.Second)
 	for countdown := 10; countdown > 0; countdown-- {
 		select {
@@ -61,7 +61,7 @@ func (c *Coordinator) Pseudo_task(key int, ch chan struct{}) {
 			return
 		}
 	}
-	fmt.Println("pseudo_task timeout:", key)
+	fmt.Printf("pseudo_task %s timeout:\n", taskname)
 	c.taskStatue.Mutex.Lock()
 	defer c.taskStatue.Mutex.Unlock()
 	file, ok := c.taskStatue.Allocated[key]
@@ -79,9 +79,7 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 			func() {
 				c.taskStatue.Mutex.Lock()
 				defer c.taskStatue.Mutex.Unlock()
-				if len(c.taskStatue.Finished) == c.nReduce {
-					reply.Task = -3
-				} else if len(c.taskStatue.New) == 0 {
+				if len(c.taskStatue.New) == 0 {
 					reply.Task = -1
 				} else {
 					for key, value := range c.taskStatue.New {
@@ -90,7 +88,7 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 						reply.File = value
 						reply.NReduce = c.nReduce
 						c.taskStatue.Allocated[key] = AllocatedType{make(chan struct{}), value}
-						go c.Pseudo_task(key, c.taskStatue.Allocated[key].Chan)
+						go c.Pseudo_task(key, c.taskStatue.Allocated[key].Chan, "reduce")
 						delete(c.taskStatue.New, key)
 						break
 					}
@@ -111,7 +109,7 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 						reply.File = value
 						reply.NReduce = c.nReduce
 						c.taskStatue.Allocated[key] = AllocatedType{make(chan struct{}), value}
-						go c.Pseudo_task(key, c.taskStatue.Allocated[key].Chan)
+						go c.Pseudo_task(key, c.taskStatue.Allocated[key].Chan, "map")
 						delete(c.taskStatue.New, key)
 						break
 					}
@@ -140,9 +138,24 @@ func (c *Coordinator) WorkerHandler(args *WorkerArgs, reply *CoordinatorReply) e
 			reply.Task = -2
 		}()
 	case 2: //2 report reduce task finished
-		reply.Task = -2
+		func() {
+			c.taskStatue.Mutex.Lock()
+			defer c.taskStatue.Mutex.Unlock()
+			file, ok := c.taskStatue.Allocated[args.X]
+			if ok {
+				file.Chan <- struct{}{}
+				c.taskStatue.Finished[args.X] = file.name
+				delete(c.taskStatue.Allocated, args.X)
+			}
+			if len(c.taskStatue.Finished) == c.nReduce {
+				reply.Task = -3
+				c.finished = true
+			} else {
+				reply.Task = -2
+			}
+		}()
 	}
-	fmt.Printf("WorkerHandler was called, args: %v, reply: %v\n", args, reply)
+	//fmt.Printf("WorkerHandler was called, args: %v, reply: %v\n", args, reply)
 	return nil
 }
 
