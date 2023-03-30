@@ -111,10 +111,9 @@ type Raft struct {
 	nextIndex  []int // for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
 	matchIndex []int // for each server, index of the highest log entry known to be replicated on server (initialized to 0, increases monotonically)
 
-	myState          int8 // 0 follower, 1 candidate, 2 leader
-	lastAppliedTime  time.Time
-	vote             Votes
-	stopHearbeatChan chan struct{}
+	myState         int8 // 0 follower, 1 candidate, 2 leader
+	lastAppliedTime time.Time
+	vote            Votes
 }
 
 func (rf *Raft) changeTerm(term int) {
@@ -284,7 +283,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 				}
 			}
 			rf.mu.Unlock()
-			go rf.heartbeat(rf.stopHearbeatChan)
 
 		}
 	}
@@ -454,13 +452,12 @@ func (rf *Raft) ticker() {
 }
 
 // leader heartbeat, if current peer isn't leader, it should stop the goroutine
-func (rf *Raft) heartbeat(stopCh <-chan struct{}) {
+func (rf *Raft) heartbeat() {
+
 	for rf.killed() == false {
-		select {
-		case <-stopCh:
-			return
-		default:
-			rf.mu.Lock()
+
+		rf.mu.Lock()
+		if rf.myState == 2 {
 			logPrint(rf.me, "heartbeat", "")
 			for i, _ := range rf.peers {
 				if i != rf.me {
@@ -474,10 +471,10 @@ func (rf *Raft) heartbeat(stopCh <-chan struct{}) {
 					}, &AppendEntriesReply{})
 				}
 			}
-			rf.mu.Unlock()
-			// sleep for a while
-			time.Sleep(HEARTBEAT * time.Millisecond)
 		}
+		rf.mu.Unlock()
+		// sleep for a while
+		time.Sleep(HEARTBEAT * time.Millisecond)
 	}
 }
 
@@ -527,6 +524,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+	go rf.heartbeat()
 
 	return rf
 }
