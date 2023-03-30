@@ -19,7 +19,6 @@ package raft
 
 import (
 	"fmt"
-	"log"
 	//	"bytes"
 	"math/rand"
 	"sync"
@@ -98,10 +97,11 @@ type Raft struct {
 	// state a Raft server must maintain.
 
 	// state for all server
-	currentTerm int // latest term server has seen (initialized to 0 on first boot, increases monotonically)
+	currentTerm int // latest term server has seen (initialized to 1 on first boot, increases monotonically)
 	// TODO: don't forget to update votedFor when update currentTerm
-	votedFor int     // candidateId that received vote in current term (or -1 if none)
-	log      []Entry // log entries; each entry contains command for state machine,and term when entry was received by leader (first index is 1)
+	//votedFor int     // candidateId that received vote in current term (or -1 if none)
+	votedFor map[int]int // candidateId that received vote in all term (or 0 if none)
+	log      []Entry     // log entries; each entry contains command for state machine,and term when entry was received by leader (first index is 1)
 
 	// volatile state on all servers
 	commitIndex int // index of the highest log entry known to be committed (initialized to 0, increases monotonically)
@@ -118,7 +118,7 @@ type Raft struct {
 
 func (rf *Raft) changeTerm(term int) {
 	rf.currentTerm = term
-	rf.votedFor = -1
+	//rf.votedFor = -1
 }
 
 // GetState
@@ -212,16 +212,16 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Reply false if term < currentTerm (§5.1)
 	request1 := rf.currentTerm <= args.Term
 	// If votedFor is null or candidateId
-	request2 := rf.votedFor == -1 || rf.votedFor == args.CandidateId
+	request2 := rf.votedFor[args.Term] == 0 || rf.votedFor[args.Term] == args.CandidateId
 	// candidate’s log is at least as up-to-date as receiver’s log,
 	request3 := args.LastLogTerm > rf.log[len(rf.log)-1].term ||
 		args.LastLogTerm == rf.log[len(rf.log)-1].term && args.LastLogIndex >= len(rf.log)-1
 	logPrint(rf.me, "RequestVote", fmt.Sprintf("rqeuset 1 2 3 %v %v %v", request1, request2, request3))
 	if request1 && request2 && request3 {
 		reply.VoteGranted = true
-		rf.votedFor = args.CandidateId
+		rf.votedFor[args.Term] = args.CandidateId
 	}
-	logPrint(rf.me, "RequestVote", fmt.Sprintf("%d ask for vote,term is %d,rf.voteFor is %d,voteGranted=%v", args.CandidateId, args.Term, rf.votedFor, reply.VoteGranted))
+	logPrint(rf.me, "RequestVote", fmt.Sprintf("%d ask for vote,term is %d,rf.voteFor is %d,voteGranted=%v", args.CandidateId, args.Term, rf.votedFor[args.Term], reply.VoteGranted))
 }
 
 // example code to send a RequestVote RPC to a server.
@@ -481,9 +481,9 @@ func (rf *Raft) heartbeat() {
 func (rf *Raft) startElection() {
 	logPrint(rf.me, "startElection", "")
 	rf.mu.Lock()
-	rf.myState = 1      // change state to candidate
-	rf.currentTerm += 1 // increase term
-	rf.votedFor = rf.me // vote to myself
+	rf.myState = 1                      // change state to candidate
+	rf.currentTerm += 1                 // increase term
+	rf.votedFor[rf.currentTerm] = rf.me // vote to myself
 	rf.vote.Start(rf.currentTerm)
 	for i, _ := range rf.peers {
 		if i != rf.me {
@@ -513,9 +513,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.peers = peers
 	rf.persister = persister
 	rf.me = me
+	rf.currentTerm = 1
 
 	// Your initialization code here (2A, 2B, 2C).
-	rf.votedFor = -1
+	rf.votedFor = make(map[int]int)
 	rf.log = append(rf.log, Entry{}) // keep the log begin with 1
 	rf.lastAppliedTime = time.Now()
 
@@ -537,5 +538,5 @@ func minInt(a, b int) int {
 }
 
 func logPrint(me int, fname, msg string) {
-	log.Printf("peer %d,function %s,msg:%s\n", me, fname, msg)
+	//log.Printf("peer %d,function %s,msg:%s\n", me, fname, msg)
 }
